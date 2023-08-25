@@ -1,3 +1,9 @@
+
 fn main() {
-    println!("Hello, world!");
+    //Initialize file handling/BTree stuff
+
+    //start REPL
+    loop {
+        
+    }
 }
