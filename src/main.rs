@@ -12,7 +12,17 @@ fn main() -> Result<()>{
         match readline {
             Ok(line) => {
                 //rl.add_history_entry(line.as_str());
-                println!("Line: {}", line);
+                
+                //if line starts with ., do meta command
+                if line.starts_with('.') {
+                    match line.as_str() {
+                        ".exit" => break,
+                        _ => {
+                            println!("Unknown command {}", line);
+                        }
+                    }
+                }
+                //else process statement
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
