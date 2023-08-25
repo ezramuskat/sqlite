@@ -23,6 +23,9 @@ fn main() -> Result<()>{
                     }
                 }
                 //else process statement
+                else {
+                    parse_statement(line);
+                }
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -40,4 +43,17 @@ fn main() -> Result<()>{
     }
 
     Ok(())
+}
+
+fn parse_statement(statement: String) {
+    if statement.is_empty() {
+        return;
+    }
+    let args: Vec<&str> = statement.split_ascii_whitespace().collect();
+
+    match args[0] {
+        _ => {
+            println!("Unknown statement");
+        }
+    }
 }
