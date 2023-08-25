@@ -45,15 +45,66 @@ fn main() -> Result<()>{
     Ok(())
 }
 
-fn parse_statement(statement: String) {
-    if statement.is_empty() {
-        return;
-    }
-    let args: Vec<&str> = statement.split_ascii_whitespace().collect();
+const SELECT_SYNTAX_STRING: &str = "Syntax: SELECT column1, column2, ... FROM table_name; or SELECT * FROM table_name;";
+const INSERT_SYNTAX_STRING: &str = "Syntax: INSERT INTO table_name VALUES (value1, value2, ...); or INSERT INTO table_name (column1, column2, ...) VALUES (value1, value2, ...);";
 
-    match args[0] {
-        _ => {
+fn parse_statement(statement: String) {
+    let mut args= statement.split_ascii_whitespace();
+
+    match args.next() {
+        Some("SELECT") => {
+            let mut columns: Vec<&str> = vec![];
+            while let Some(column) = args.next() {
+                //handle wildcards
+                if column == "*" {
+                    if !columns.is_empty() {
+                        println!("The wildcard operator must be used on its own");
+                        return;
+                    }
+                    else if args.next() != Some("FROM") {
+                        println!("{}", SELECT_SYNTAX_STRING);
+                        return;
+                    }
+                    else {
+                        columns.push("*");
+                        break;
+                    }
+                } else if column == "FROM" {
+                    if columns.is_empty() {
+                        println!("{}", SELECT_SYNTAX_STRING);
+                        return;
+                    }
+                    break;
+                } else {
+                    columns.push(column);
+                }
+            }
+            if args.next() == None {
+                println!("{}", SELECT_SYNTAX_STRING);
+            }
+            println!("SELECT functionality is not currently supported");
+        },
+        Some("UPDATE") => {
+            println!("UPDATE functionality is not currently supported");
+        },
+        Some("DELETE") => {
+            println!("DELETE functionality is not currently supported");
+        },
+        Some("INSERT") => {
+            if args.next() != Some("INTO") {
+                println!("{}", INSERT_SYNTAX_STRING);
+                return;
+            }
+            println!("INSERT functionality is not currently supported");
+        },
+        Some("CREATE") => {
+            println!("CREATE functionality is not currently supported");
+        },
+        Some(_) => {
             println!("Unknown statement");
+        },
+        None => {
+            return;
         }
     }
 }
