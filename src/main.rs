@@ -1,4 +1,9 @@
+use std::str::FromStr;
+
 use rustyline::{DefaultEditor, Result, error::ReadlineError};
+use strum::{IntoEnumIterator, EnumMessage};
+use strum_macros::{Display, EnumIter, EnumString, EnumMessage};
+
 
 
 fn main() -> Result<()>{
@@ -15,9 +20,14 @@ fn main() -> Result<()>{
                 
                 //if line starts with ., do meta command
                 if line.starts_with('.') {
-                    match line.as_str() {
-                        ".exit" => break,
-                        _ => {
+                    match MetaCommand::from_str(line.as_str()) {
+                        Ok(MetaCommand::Exit) => break,
+                        Ok(MetaCommand::Help) => {
+                            for command in MetaCommand::iter() {
+                                println!("{} {:^32} {}", command.to_string(), " ", command.get_message().unwrap())
+                            }
+                        },
+                        Err(_) => {
                             println!("Unknown command {}", line);
                         }
                     }
@@ -43,6 +53,17 @@ fn main() -> Result<()>{
     }
 
     Ok(())
+}
+
+#[derive(Display, EnumIter, EnumMessage,EnumString)]
+enum MetaCommand {
+    #[strum(message="Exit this program")]
+    #[strum(serialize = ".exit")]
+    Exit,
+
+    #[strum(message="Show help text")]
+    #[strum(serialize = ".help")]
+    Help,
 }
 
 const SELECT_SYNTAX_STRING: &str = "Syntax: SELECT column1, column2, ... FROM table_name; or SELECT * FROM table_name;";
@@ -81,6 +102,7 @@ fn parse_statement(statement: String) {
             }
             if args.next() == None {
                 println!("{}", SELECT_SYNTAX_STRING);
+                return;
             }
             println!("SELECT functionality is not currently supported");
         },
@@ -98,6 +120,14 @@ fn parse_statement(statement: String) {
             println!("INSERT functionality is not currently supported");
         },
         Some("CREATE") => {
+            if args.next() == Some("TABLE") {
+                
+            } else if args.next() == Some("INDEX") {
+                
+            } else {
+                println!("Unknown statement");
+                return;
+            }
             println!("CREATE functionality is not currently supported");
         },
         Some(_) => {
