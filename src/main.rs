@@ -1,11 +1,12 @@
 use std::str::FromStr;
 
+use executer::execute_statement;
+use nom_sql::parser;
 use rustyline::{DefaultEditor, Result, error::ReadlineError};
 use strum::{IntoEnumIterator, EnumMessage};
 use strum_macros::{Display, EnumIter, EnumString, EnumMessage};
 
-
-
+mod executer;
 fn main() -> Result<()>{
     //Initialize file handling/BTree stuff
 
@@ -34,7 +35,10 @@ fn main() -> Result<()>{
                 }
                 //else process statement
                 else {
-                    parse_statement(line);
+                    match parser::parse_query(line) {
+                        Ok(query) => execute_statement(query),
+                        Err(e) => println!("{}", e)
+                    }
                 }
             },
             Err(ReadlineError::Interrupted) => {
@@ -64,77 +68,4 @@ enum MetaCommand {
     #[strum(message="Show help text")]
     #[strum(serialize = ".help")]
     Help,
-}
-
-const SELECT_SYNTAX_STRING: &str = "Syntax: SELECT column1, column2, ... FROM table_name; or SELECT * FROM table_name;";
-const INSERT_SYNTAX_STRING: &str = "Syntax: INSERT INTO table_name VALUES (value1, value2, ...); or INSERT INTO table_name (column1, column2, ...) VALUES (value1, value2, ...);";
-
-fn parse_statement(statement: String) {
-    let mut args= statement.split_ascii_whitespace();
-
-    match args.next() {
-        Some("SELECT") => {
-            let mut columns: Vec<&str> = vec![];
-            while let Some(column) = args.next() {
-                //handle wildcards
-                if column == "*" {
-                    if !columns.is_empty() {
-                        println!("The wildcard operator must be used on its own");
-                        return;
-                    }
-                    else if args.next() != Some("FROM") {
-                        println!("{}", SELECT_SYNTAX_STRING);
-                        return;
-                    }
-                    else {
-                        columns.push("*");
-                        break;
-                    }
-                } else if column == "FROM" {
-                    if columns.is_empty() {
-                        println!("{}", SELECT_SYNTAX_STRING);
-                        return;
-                    }
-                    break;
-                } else {
-                    columns.push(column);
-                }
-            }
-            if args.next() == None {
-                println!("{}", SELECT_SYNTAX_STRING);
-                return;
-            }
-            println!("SELECT functionality is not currently supported");
-        },
-        Some("UPDATE") => {
-            println!("UPDATE functionality is not currently supported");
-        },
-        Some("DELETE") => {
-            println!("DELETE functionality is not currently supported");
-        },
-        Some("INSERT") => {
-            if args.next() != Some("INTO") {
-                println!("{}", INSERT_SYNTAX_STRING);
-                return;
-            }
-            println!("INSERT functionality is not currently supported");
-        },
-        Some("CREATE") => {
-            if args.next() == Some("TABLE") {
-                
-            } else if args.next() == Some("INDEX") {
-                
-            } else {
-                println!("Unknown statement");
-                return;
-            }
-            println!("CREATE functionality is not currently supported");
-        },
-        Some(_) => {
-            println!("Unknown statement");
-        },
-        None => {
-            return;
-        }
-    }
 }
