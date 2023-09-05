@@ -7,6 +7,7 @@ use strum::{IntoEnumIterator, EnumMessage};
 use strum_macros::{Display, EnumIter, EnumString, EnumMessage};
 
 mod executer;
+mod dbtree;
 fn main() -> Result<()>{
     //Initialize file handling/BTree stuff
 
