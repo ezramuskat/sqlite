@@ -1,5 +1,6 @@
-use std::{fs::File, io::{self, Seek, BufReader, Read}};
+use std::{fs::File, io::{self, Seek, BufReader, Read, Error}};
 
+#[derive(Debug)]
 enum NodeType {
 	InteriorIndex,
 	LeafIndex,
@@ -19,7 +20,7 @@ struct DBTreeHeader {
 
 struct PageHeader {
 	node_type: NodeType,
-	freeblock_start: Option<u16>,
+	freeblock_start: u16,
 	num_cells: u16,
 	cell_start: u16
 	//May add fragmented free bytes and rightmost pointer later
@@ -27,7 +28,7 @@ struct PageHeader {
 
 pub struct DBTreeRoot {
 	db_header: DBTreeHeader,
-	//page_header: PageHeader
+	page_header: PageHeader
 }
 
 impl DBTreeRoot {
@@ -54,7 +55,7 @@ impl DBTreeRoot {
 		//make multiple buffers to reduce the actual amount of reading, but for now
 		//we'll just ignore them
 		reader.read(&mut buf)?;
-		let page_reserve_bytes = u8::from((&buf)[0]);
+		let page_reserve_bytes = (&buf[0]).clone();
 
 		//get num pages
 		reader.seek(io::SeekFrom::Current(4))?;
@@ -73,15 +74,39 @@ impl DBTreeRoot {
 		let free_pages = u32::from_be_bytes(buf.try_into().expect("invalid length"));
 
 
+		//start reading page header
+		let mut buf:[u8;8] = [0;8];
+		reader.seek(io::SeekFrom::Start(100))?;
+		reader.read(&mut buf)?;
+
+		let node_type: NodeType = match &buf[0] {
+			2 => NodeType::InteriorIndex,
+			5 => NodeType::InteriorTable,
+			10 => NodeType::LeafIndex,
+			13 => NodeType::LeafTable,
+			_ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid node type"))
+		};
+
+		let freeblock_start = u16::from_be_bytes((&buf[1..3]).try_into().expect("incorrect length"));
+
+		let num_cells = u16::from_be_bytes((&buf[3..5]).try_into().expect("incorrect length"));
+
+		let cell_start = u16::from_be_bytes((&buf[5..7]).try_into().expect("incorrect length"));
+
+		let page_header = PageHeader {
+			node_type, freeblock_start, num_cells, cell_start
+		};
+
 		let db_header = DBTreeHeader {
 			file, page_size, ff_write, ff_read, page_reserve_bytes, num_pages, freelist_start, free_pages
 		};
 
-		Ok(DBTreeRoot {db_header})
+		Ok(DBTreeRoot {db_header, page_header})
 	}
 
 	pub fn get_debug_info(&self) {
 		println!("This database has {} pages", self.db_header.num_pages);
+		println!("This root node is of type {:?}", self.page_header.node_type);
 	}
 
 }

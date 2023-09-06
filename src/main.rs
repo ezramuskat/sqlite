@@ -13,6 +13,7 @@ fn main() -> Result<()>{
     //Initialize file handling/BTree stuff
     let cli = Cli::parse();
 
+    //TODO: this is temporary, before implementing commands this should change to some sort of representation of the sqlite_schema table
     let db_root_node = dbtree::DBTreeRoot::new(&cli.db_file_name)?;
 
     db_root_node.get_debug_info();
