@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use executer::execute_statement;
+use clap::Parser;
 use nom_sql::parser;
 use rustyline::{DefaultEditor, Result, error::ReadlineError};
 use strum::{IntoEnumIterator, EnumMessage};
@@ -10,9 +11,16 @@ mod executer;
 mod dbtree;
 fn main() -> Result<()>{
     //Initialize file handling/BTree stuff
+    let cli = Cli::parse();
+
+    let db_root_node = dbtree::DBTreeRoot::new(&cli.db_file_name)?;
+
+    db_root_node.get_debug_info();
+    
 
     //start REPL
     let mut rl = DefaultEditor::new()?;
+    
     
     loop {
         let readline = rl.readline("db > ");
@@ -69,4 +77,10 @@ enum MetaCommand {
     #[strum(message="Show help text")]
     #[strum(serialize = ".help")]
     Help,
+}
+
+//argument parsing stuff; might be overkill, but will likely be useful if we implement flags in the future
+#[derive(Parser)]
+struct Cli {
+    db_file_name: String
 }
