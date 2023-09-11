@@ -29,12 +29,63 @@ struct PageHeader {
 }
 
 pub struct DBTreeRoot {
-    db_header: DBTreeHeader,
     page_header: PageHeader,
 }
 
 impl DBTreeRoot {
+    //TODO: this doesn't fully work, needs to be reworked to start at the right offset
     pub fn new(file_name: &str) -> Result<DBTreeRoot, io::Error> {
+        //open file
+        let file = File::open(file_name)?;
+        let mut reader = BufReader::new(&file);
+
+        //start reading page header
+        let mut buf: [u8; 8] = [0; 8];
+        reader.seek(io::SeekFrom::Start(100))?;
+        reader.read(&mut buf)?;
+
+        let node_type: NodeType = match &buf[0] {
+            2 => NodeType::InteriorIndex,
+            5 => NodeType::InteriorTable,
+            10 => NodeType::LeafIndex,
+            13 => NodeType::LeafTable,
+            _ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid node type")),
+        };
+
+        let freeblock_start =
+            u16::from_be_bytes((&buf[1..3]).try_into().expect("incorrect length"));
+
+        let num_cells = u16::from_be_bytes((&buf[3..5]).try_into().expect("incorrect length"));
+
+        let cell_start = u16::from_be_bytes((&buf[5..7]).try_into().expect("incorrect length"));
+
+        let page_header = PageHeader {
+            node_type,
+            freeblock_start,
+            num_cells,
+            cell_start,
+        };
+
+        Ok(DBTreeRoot {
+            page_header,
+        })
+    }
+
+    pub fn get_debug_info(&self) {
+        println!("This root node is of type {:?}", self.page_header.node_type);
+    }
+}
+
+struct Node {
+    page_header: PageHeader,
+}
+
+pub struct DBSchemaTable {
+    db_header: DBTreeHeader,
+}
+
+impl DBSchemaTable {
+    pub fn new(file_name: &str) -> Result<DBSchemaTable, io::Error> {
         //open file
         let file = File::open(file_name)?;
         let mut reader = BufReader::new(&file);
@@ -113,18 +164,8 @@ impl DBTreeRoot {
             free_pages,
         };
 
-        Ok(DBTreeRoot {
+        Ok(DBSchemaTable {
             db_header,
-            page_header,
         })
     }
-
-    pub fn get_debug_info(&self) {
-        println!("This database has {} pages", self.db_header.num_pages);
-        println!("This root node is of type {:?}", self.page_header.node_type);
-    }
-}
-
-struct Node {
-    page_header: PageHeader,
 }
