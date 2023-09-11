@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, BufReader, Error, Read, Seek},
+    io::{self, BufReader, Error, Read, Seek}, collections::HashSet,
 };
 
 #[derive(Debug)]
@@ -10,16 +10,6 @@ enum NodeType {
     InteriorTable,
     LeafTable,
 }
-struct DBTreeHeader {
-    file: File,
-    page_size: u16,
-    ff_write: bool,
-    ff_read: bool,
-    page_reserve_bytes: u8,
-    num_pages: u32,
-    freelist_start: u32,
-    free_pages: u32,
-}
 
 struct PageHeader {
     node_type: NodeType,
@@ -28,7 +18,7 @@ struct PageHeader {
     cell_start: u16, //May add fragmented free bytes and rightmost pointer later
 }
 
-pub struct DBTreeRoot {
+struct DBTreeRoot {
     page_header: PageHeader,
 }
 
@@ -71,17 +61,32 @@ impl DBTreeRoot {
         })
     }
 
-    pub fn get_debug_info(&self) {
+    fn get_debug_info(&self) {
         println!("This root node is of type {:?}", self.page_header.node_type);
     }
 }
 
-struct Node {
-    page_header: PageHeader,
+struct TableFmt {
+    name: String,
+    tbl_name: String,
+    root_page: u32,
+    sql_text: String
+}
+
+struct DBHeader {
+    file: File,
+    page_size: u16,
+    ff_write: bool,
+    ff_read: bool,
+    page_reserve_bytes: u8,
+    num_pages: u32,
+    freelist_start: u32,
+    free_pages: u32,
 }
 
 pub struct DBSchemaTable {
-    db_header: DBTreeHeader,
+    db_header: DBHeader,
+    tables: HashSet<TableFmt> //need to do tests comparing this to a Vec; since tables are small, linear search might outperform hashing
 }
 
 impl DBSchemaTable {
@@ -95,8 +100,6 @@ impl DBSchemaTable {
         //get page size and file format data
         reader.seek(io::SeekFrom::Start(16))?;
         reader.read(&mut buf)?;
-
-        println!("{:?}", &buf);
 
         let page_size = u16::from_be_bytes((&buf[0..2]).try_into().expect("incorrect length"));
 
@@ -153,7 +156,11 @@ impl DBSchemaTable {
             cell_start,
         };
 
-        let db_header = DBTreeHeader {
+        //read through the BTree and get the various entires
+
+        let tables: HashSet<TableFmt> = HashSet::new();
+
+        let db_header = DBHeader {
             file,
             page_size,
             ff_write,
@@ -166,6 +173,7 @@ impl DBSchemaTable {
 
         Ok(DBSchemaTable {
             db_header,
+            tables
         })
     }
 }
