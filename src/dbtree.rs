@@ -1,7 +1,9 @@
 use std::{
     fs::File,
-    io::{self, BufReader, Error, Read, Seek}, collections::HashSet,
+    io::{self, BufReader, Error, Read, Seek}, collections::{HashSet, HashMap},
 };
+
+use nom_sql::{FieldDefinitionExpression, ConditionExpression};
 
 #[derive(Debug)]
 enum NodeType {
@@ -18,13 +20,13 @@ struct PageHeader {
     cell_start: u16, //May add fragmented free bytes and rightmost pointer later
 }
 
-struct DBTreeRoot {
+struct DBTreeRoot<'a> {
+    db_header: &'a DBHeader,
     page_header: PageHeader,
 }
 
-impl DBTreeRoot {
-    //TODO: this doesn't fully work, needs to be reworked to start at the right offset
-    fn new(db_header: &DBHeader, page_num: u32) -> Result<DBTreeRoot, io::Error> {
+impl<'a> DBTreeRoot<'a> {
+    fn new(db_header: &'a DBHeader, page_num: u32) -> Result<DBTreeRoot, io::Error> {
         //open file
         let mut reader = BufReader::new(&db_header.file);
 
@@ -61,8 +63,17 @@ impl DBTreeRoot {
         };
 
         Ok(DBTreeRoot {
+            db_header,
             page_header,
         })
+    }
+    
+    ///Pulls data from a DBTree, in line with a simple SELECT statement.
+    /// 
+    /// Returns a Hashtable with keys as column names, and values as all results in said column matching the request
+    fn select(fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> HashMap<String, Vec<String>>{
+
+        todo!()
     }
 
     fn get_debug_info(&self) {
