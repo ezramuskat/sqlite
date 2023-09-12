@@ -16,6 +16,7 @@ fn main() -> Result<()> {
     //TODO: this is temporary, before implementing commands 
     let db_schema = dbtree::DBSchemaTable::new(&cli.db_file_name)?;
 
+    println!("{:?}", db_schema.list_tables());
 
     //start REPL
     let mut rl = DefaultEditor::new()?;
