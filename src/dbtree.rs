@@ -20,13 +20,13 @@ struct PageHeader {
     cell_start: u16, //May add fragmented free bytes and rightmost pointer later
 }
 
-struct DBTreeRoot<'a> {
+struct DBTreeNode<'a> {
     db_header: &'a DBHeader,
     page_header: PageHeader,
 }
 
-impl<'a> DBTreeRoot<'a> {
-    fn new(db_header: &'a DBHeader, page_num: u32) -> Result<DBTreeRoot, io::Error> {
+impl<'a> DBTreeNode<'a> {
+    fn new(db_header: &'a DBHeader, page_num: u32) -> Result<DBTreeNode, io::Error> {
         //open file
         let mut reader = BufReader::new(&db_header.file);
 
@@ -62,22 +62,30 @@ impl<'a> DBTreeRoot<'a> {
             cell_start,
         };
 
-        Ok(DBTreeRoot {
+        //read pointer array
+
+
+        Ok(DBTreeNode {
             db_header,
             page_header,
         })
     }
-    
-    ///Pulls data from a DBTree, in line with a simple SELECT statement.
-    /// 
-    /// Returns a Hashtable with keys as column names, and values as all results in said column matching the request
-    fn select(fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> HashMap<String, Vec<String>>{
 
+    fn select(&self, fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> HashMap<String, Vec<String>> {
+        match self.page_header.node_type {
+            NodeType::InteriorIndex | NodeType::InteriorTable => {
+
+            }
+            NodeType::LeafIndex => {
+                return HashMap::new() //TODO: properly implement this
+            }
+            NodeType::LeafTable => {
+                let mut return_table: HashMap<String, Vec<String>> = HashMap::new();
+
+                return return_table;
+            }
+        }
         todo!()
-    }
-
-    fn get_debug_info(&self) {
-        println!("This root node is of type {:?}", self.page_header.node_type);
     }
 }
 
@@ -161,7 +169,7 @@ impl DBSchemaTable {
             free_pages,
         };
 
-        let tree_root = DBTreeRoot::new(&db_header, 1)?;
+        let tree_root = DBTreeNode::new(&db_header, 1)?;
 
         Ok(DBSchemaTable {
             db_header,
