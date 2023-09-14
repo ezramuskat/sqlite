@@ -17,16 +17,25 @@ struct PageHeader {
     node_type: NodeType,
     freeblock_start: u16,
     num_cells: u16,
-    cell_start: u16, //May add fragmented free bytes and rightmost pointer later
+    cell_start: u16, //May add fragmented free bytes later
+    right_pointer: Option<u32>
+
+}
+
+//Represents a single row
+struct Record {
+    header: [u64]
 }
 
 struct DBTreeNode<'a> {
     db_header: &'a DBHeader,
     page_header: PageHeader,
+    cell_pointers: Option<Vec<u16>>, //don't need the actual cell data till we start looking through things, so probably best to not store cell data in memory
+    columns: Vec<String> //TODO: See if we can get this to an array. Currently attempts to make it an array are causing compiler issues
 }
 
 impl<'a> DBTreeNode<'a> {
-    fn new(db_header: &'a DBHeader, page_num: u32) -> Result<DBTreeNode, io::Error> {
+    fn new(db_header: &'a DBHeader, page_num: u32, columns: Vec<String>) -> Result<DBTreeNode, io::Error> {
         //open file
         let mut reader = BufReader::new(&db_header.file);
 
@@ -55,19 +64,49 @@ impl<'a> DBTreeNode<'a> {
 
         let cell_start = u16::from_be_bytes((&buf[5..7]).try_into().expect("incorrect length"));
 
+        let free_bytes  = buf[7]; //not actually stored in the in-memory header, just used for some optimizations in reading cells
+
+        
+
+        let right_pointer: Option<u32> = match node_type {
+            NodeType::InteriorIndex | NodeType::InteriorTable => {
+                let mut rp_buf: [u8; 4] = [0; 4];
+                reader.read(&mut rp_buf)?;
+                Some(u32::from_be_bytes(rp_buf.try_into().expect("invalid length")))
+            },
+            _ => None
+        };
+        //read pointer array
+        let cell_pointers: Option<Vec<u16>> = match free_bytes {
+            0 => None,
+            _ => {
+                let mut pointers = Vec::new();
+
+                //Annoying workarounds bc dynamically-sized arrays aren't stable yet
+                let mut pointer_buf_vec: Vec<u8> = Vec::with_capacity((num_cells * 2) as usize);
+                pointer_buf_vec.resize((num_cells * 2) as usize, 0);
+                let mut pointer_buf = pointer_buf_vec.as_mut_slice();
+
+                reader.read(pointer_buf)?;
+                println!("boop");
+                println!("debug info on the pointer vec thingy{:?}", pointer_buf_vec);
+                Some(pointers)
+            }
+        };
+        
         let page_header = PageHeader {
             node_type,
             freeblock_start,
             num_cells,
             cell_start,
+            right_pointer
         };
-
-        //read pointer array
-
 
         Ok(DBTreeNode {
             db_header,
             page_header,
+            cell_pointers,
+            columns
         })
     }
 
@@ -168,8 +207,8 @@ impl DBSchemaTable {
             freelist_start,
             free_pages,
         };
-
-        let tree_root = DBTreeNode::new(&db_header, 1)?;
+        let mut column_arr: Vec<String> = Vec::new(); 
+        let tree_root = DBTreeNode::new(&db_header, 1, column_arr)?;
 
         Ok(DBSchemaTable {
             db_header,
