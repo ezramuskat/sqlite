@@ -28,14 +28,15 @@ struct Record {
 }
 
 struct DBTreeNode<'a> {
-    db_header: &'a DBHeader,
+    page_num: u32,
+    db_header: &'a mut DBHeader, //this must be mut to enable file seek stuff
     page_header: PageHeader,
     cell_pointers: Option<Vec<u16>>, //don't need the actual cell data till we start looking through things, so probably best to not store cell data in memory
     columns: Vec<String> //TODO: See if we can get this to an array. Currently attempts to make it an array are causing compiler issues
 }
 
 impl<'a> DBTreeNode<'a> {
-    fn new(db_header: &'a DBHeader, page_num: u32, columns: Vec<String>) -> Result<DBTreeNode, io::Error> {
+    fn new(db_header: &'a mut DBHeader, page_num: u32, columns: Vec<String>) -> Result<DBTreeNode, io::Error> {
         //open file
         let mut reader = BufReader::new(&db_header.file);
 
@@ -103,6 +104,7 @@ impl<'a> DBTreeNode<'a> {
         };
 
         Ok(DBTreeNode {
+            page_num,
             db_header,
             page_header,
             cell_pointers,
@@ -110,18 +112,29 @@ impl<'a> DBTreeNode<'a> {
         })
     }
 
-    fn select(&self, fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> HashMap<String, Vec<String>> {
+    ///Gets a collection of rows from a table, obeying where clausues passed
+    fn select(&mut self, fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> Result<HashMap<String, Vec<String>>, io::Error> {
         match self.page_header.node_type {
             NodeType::InteriorIndex | NodeType::InteriorTable => {
 
             }
             NodeType::LeafIndex => {
-                return HashMap::new() //TODO: properly implement this
+                return Ok(HashMap::new()) //TODO: properly implement this
             }
             NodeType::LeafTable => {
                 let mut return_table: HashMap<String, Vec<String>> = HashMap::new();
+                let mut file = &self.db_header.file;
 
-                return return_table;
+                //save our starting position and move to the start for this node's page
+                let orig_file_pos = file.stream_position()?;
+                let page_start = self.db_header.page_size as u64 * self.page_num as u64;
+                file.seek(io::SeekFrom::Start(page_start))?;
+
+                for pointer in &self.cell_pointers {
+                    
+                }
+                file.seek(io::SeekFrom::Start(orig_file_pos))?;
+                return Ok(return_table);
             }
         }
         todo!()
@@ -197,7 +210,7 @@ impl DBSchemaTable {
 
         let tables: HashSet<TableFmt> = HashSet::new();
 
-        let db_header = DBHeader {
+        let mut db_header = DBHeader {
             file,
             page_size,
             ff_write,
@@ -208,7 +221,7 @@ impl DBSchemaTable {
             free_pages,
         };
         let mut column_arr: Vec<String> = Vec::new(); 
-        let tree_root = DBTreeNode::new(&db_header, 1, column_arr)?;
+        let tree_root = DBTreeNode::new(&mut db_header, 1, column_arr)?;
 
         Ok(DBSchemaTable {
             db_header,
