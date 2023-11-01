@@ -3,6 +3,7 @@ use std::{
     io::{self, BufReader, Error, Read, Seek}, collections::{HashSet, HashMap},
 };
 
+use itertools::{Itertools, multizip};
 use nom_sql::{FieldDefinitionExpression, ConditionExpression};
 
 #[derive(Debug)]
@@ -57,7 +58,6 @@ impl<'a> DBTreeNode<'a> {
             13 => NodeType::LeafTable,
             _ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid node type")),
         };
-
         let freeblock_start =
             u16::from_be_bytes((&buf[1..3]).try_into().expect("incorrect length"));
 
@@ -65,7 +65,8 @@ impl<'a> DBTreeNode<'a> {
 
         let cell_start = u16::from_be_bytes((&buf[5..7]).try_into().expect("incorrect length"));
 
-        let free_bytes  = buf[7]; //not actually stored in the in-memory header, just used for some optimizations in reading cells
+        //Not sure what was meant by the below comment, but leaving it here in case it turns out to have been correct later
+        //let free_bytes  = buf[7]; //not actually stored in the in-memory header, just used for some optimizations in reading cells
 
         
 
@@ -81,8 +82,6 @@ impl<'a> DBTreeNode<'a> {
         let cell_pointers: Option<Vec<u16>> = match num_cells {
             0 => None,
             _ => {
-                
-
                 //Annoying workarounds bc dynamically-sized arrays aren't stable yet
                 let mut pointer_buf_vec: Vec<u8> = Vec::with_capacity((num_cells * 2) as usize);
                 pointer_buf_vec.resize((num_cells * 2) as usize, 0);
@@ -119,13 +118,13 @@ impl<'a> DBTreeNode<'a> {
     fn select(&mut self, fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> Result<HashMap<String, Vec<String>>, io::Error> {
         match self.page_header.node_type {
             NodeType::InteriorIndex | NodeType::InteriorTable => {
-
+                
             }
             NodeType::LeafIndex => {
                 return Ok(HashMap::new()) //TODO: properly implement this
             }
             NodeType::LeafTable => {
-                let mut return_table: HashMap<String, Vec<String>> = HashMap::new();
+                let return_table: HashMap<String, Vec<String>> = HashMap::new();
                 let mut file = &self.db_header.file;
 
                 //save our starting position and move to the start for this node's page
@@ -144,11 +143,13 @@ impl<'a> DBTreeNode<'a> {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 struct TableFmt {
+    table_type: String, //may convert this to an enum
     name: String,
     tbl_name: String,
     root_page: u32,
-    sql_text: String
+    sql: String
 }
 
 struct DBHeader {
@@ -211,7 +212,6 @@ impl DBSchemaTable {
 
         //read through the BTree and get the various entires
 
-        let tables: HashSet<TableFmt> = HashSet::new();
 
         let mut db_header = DBHeader {
             file,
@@ -223,9 +223,26 @@ impl DBSchemaTable {
             freelist_start,
             free_pages,
         };
-        let mut column_arr: Vec<String> = Vec::new(); 
-        let tree_root = DBTreeNode::new(&mut db_header, 1, column_arr)?;
+        let column_arr: Vec<String> = Vec::new(); 
+        let mut tree_root = DBTreeNode::new(&mut db_header, 1, column_arr)?;
 
+        let table_data = tree_root.select(vec![FieldDefinitionExpression::All], None)?;
+
+        let mut tables: HashSet<TableFmt> = HashSet::with_capacity(table_data.get("type").expect("schema table somehow missing type column").len());
+        
+        for (table_type, name, tbl_name, root_page, sql) in multizip(table_data.values().collect_tuple::<(&Vec<String>, &Vec<String>, &Vec<String>, &Vec<String>, &Vec<String>)>().expect("error with argument numbers while going through schema table")) {
+            tables.insert(
+                TableFmt {
+                    table_type: table_type.to_owned(),
+                    name: name.to_owned(),
+                    tbl_name: tbl_name.to_owned(),
+                    root_page: root_page.parse().expect("Should have been a u32, was not"),
+                    sql: sql.to_owned()
+                }
+            );
+        }
+        
+        //let tables = HashSet::new();
         Ok(DBSchemaTable {
             db_header,
             tables
