@@ -81,7 +81,7 @@ impl<'a> DBTreeNode<'a> {
         let cell_pointers: Option<Vec<u16>> = match num_cells {
             0 => None,
             _ => {
-                let mut pointers = Vec::new();
+                
 
                 //Annoying workarounds bc dynamically-sized arrays aren't stable yet
                 let mut pointer_buf_vec: Vec<u8> = Vec::with_capacity((num_cells * 2) as usize);
@@ -89,8 +89,11 @@ impl<'a> DBTreeNode<'a> {
                 let pointer_buf = pointer_buf_vec.as_mut_slice();
 
                 reader.read(pointer_buf)?;
-                println!("boop");
+                println!("{num_cells}");
                 println!("debug info on the pointer vec thingy{:?}", pointer_buf_vec);
+                let pointers = pointer_buf_vec.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
+                println!("debug info on the pointers after experimental map thingy{:?}", pointers);
+                println!("Cell start is {cell_start}");
                 Some(pointers)
             }
         };
