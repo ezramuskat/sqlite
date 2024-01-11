@@ -7,7 +7,7 @@ use itertools::{Itertools, multizip};
 use nom_sql::{FieldDefinitionExpression, ConditionExpression};
 
 #[derive(Debug)]
-enum NodeType {
+enum PageType {
     InteriorIndex,
     LeafIndex,
     InteriorTable,
@@ -15,7 +15,7 @@ enum NodeType {
 }
 
 struct PageHeader {
-    node_type: NodeType,
+    page_type: PageType,
     freeblock_start: u16,
     num_cells: u16,
     cell_start: u16, //May add fragmented free bytes later
@@ -28,7 +28,7 @@ struct Record {
     header: [u64]
 }
 
-struct DBTreeNode<'a> {
+struct DBTreePage<'a> {
     page_num: u32,
     db_header: &'a mut DBHeader, //this must be mut to enable file seek stuff
     page_header: PageHeader,
@@ -36,8 +36,8 @@ struct DBTreeNode<'a> {
     columns: Vec<String> //TODO: See if we can get this to an array. Currently attempts to make it an array are causing compiler issues
 }
 
-impl<'a> DBTreeNode<'a> {
-    fn new(db_header: &'a mut DBHeader, page_num: u32, columns: Vec<String>) -> Result<DBTreeNode, io::Error> {
+impl<'a> DBTreePage<'a> {
+    fn new(db_header: &'a mut DBHeader, page_num: u32, columns: Vec<String>) -> Result<DBTreePage, io::Error> {
         //open file
         let mut reader = BufReader::new(&db_header.file);
 
@@ -51,12 +51,12 @@ impl<'a> DBTreeNode<'a> {
         
         reader.read(&mut buf)?;
 
-        let node_type: NodeType = match &buf[0] {
-            2 => NodeType::InteriorIndex,
-            5 => NodeType::InteriorTable,
-            10 => NodeType::LeafIndex,
-            13 => NodeType::LeafTable,
-            _ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid node type")),
+        let page_type: PageType = match &buf[0] {
+            2 => PageType::InteriorIndex,
+            5 => PageType::InteriorTable,
+            10 => PageType::LeafIndex,
+            13 => PageType::LeafTable,
+            _ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid Page type")),
         };
         let freeblock_start =
             u16::from_be_bytes((&buf[1..3]).try_into().expect("incorrect length"));
@@ -70,8 +70,8 @@ impl<'a> DBTreeNode<'a> {
 
         
 
-        let right_pointer: Option<u32> = match node_type {
-            NodeType::InteriorIndex | NodeType::InteriorTable => {
+        let right_pointer: Option<u32> = match page_type {
+            PageType::InteriorIndex | PageType::InteriorTable => {
                 let mut rp_buf: [u8; 4] = [0; 4];
                 reader.read(&mut rp_buf)?;
                 Some(u32::from_be_bytes(rp_buf.try_into().expect("invalid length")))
@@ -98,14 +98,14 @@ impl<'a> DBTreeNode<'a> {
         };
         
         let page_header = PageHeader {
-            node_type,
+            page_type,
             freeblock_start,
             num_cells,
             cell_start,
             right_pointer
         };
 
-        Ok(DBTreeNode {
+        Ok(DBTreePage {
             page_num,
             db_header,
             page_header,
@@ -116,18 +116,18 @@ impl<'a> DBTreeNode<'a> {
 
     ///Gets a collection of rows from a table, obeying where clausues passed
     fn select(&mut self, fields: Vec<FieldDefinitionExpression>, where_clause: Option<ConditionExpression>) -> Result<HashMap<String, Vec<String>>, io::Error> {
-        match self.page_header.node_type {
-            NodeType::InteriorIndex | NodeType::InteriorTable => {
+        match self.page_header.page_type {
+            PageType::InteriorIndex | PageType::InteriorTable => {
                 
             }
-            NodeType::LeafIndex => {
+            PageType::LeafIndex => {
                 return Ok(HashMap::new()) //TODO: properly implement this
             }
-            NodeType::LeafTable => {
+            PageType::LeafTable => {
                 let return_table: HashMap<String, Vec<String>> = HashMap::new();
                 let mut file = &self.db_header.file;
 
-                //save our starting position and move to the start for this node's page
+                //save our starting position and move to the start for this page
                 let orig_file_pos = file.stream_position()?;
                 let page_start = self.db_header.page_size as u64 * self.page_num as u64;
                 file.seek(io::SeekFrom::Start(page_start))?;
@@ -224,7 +224,7 @@ impl DBSchemaTable {
             free_pages,
         };
         let column_arr: Vec<String> = Vec::new(); 
-        let mut tree_root = DBTreeNode::new(&mut db_header, 1, column_arr)?;
+        let mut tree_root = DBTreePage::new(&mut db_header, 1, column_arr)?;
 
         let table_data = tree_root.select(vec![FieldDefinitionExpression::All], None)?;
 
