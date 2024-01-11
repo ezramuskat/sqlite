@@ -88,11 +88,11 @@ impl<'a> DBTreePage<'a> {
                 let pointer_buf = pointer_buf_vec.as_mut_slice();
 
                 reader.read(pointer_buf)?;
-                println!("{num_cells}");
-                println!("debug info on the pointer vec thingy{:?}", pointer_buf_vec);
+                //println!("{num_cells}");
+                //println!("debug info on the pointer vec thingy{:?}", pointer_buf_vec);
                 let pointers = pointer_buf_vec.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
-                println!("debug info on the pointers after experimental map thingy{:?}", pointers);
-                println!("Cell start is {cell_start}");
+                //println!("debug info on the pointers after experimental map thingy{:?}", pointers);
+                //println!("Cell start is {cell_start}");
                 Some(pointers)
             }
         };
@@ -152,6 +152,7 @@ struct TableFmt {
     sql: String
 }
 
+#[derive(Debug)]
 struct DBHeader {
     file: File,
     page_size: u16,
@@ -174,39 +175,25 @@ impl DBSchemaTable {
         let file = File::open(file_name)?;
         let mut reader = BufReader::new(&file);
         //read db header
-        let mut buf: [u8; 4] = [0; 4];
+        let mut buf: [u8; 100] = [0; 100];
+        reader.read(&mut buf)?;
 
         //get page size and file format data
-        reader.seek(io::SeekFrom::Start(16))?;
-        reader.read(&mut buf)?;
-
-        let page_size = u16::from_be_bytes((&buf[0..2]).try_into().expect("incorrect length"));
-
-        let ff_write = buf[2] == 2;
-        let ff_read = buf[3] == 2;
+        let page_size = u16::from_be_bytes((&buf[16..18]).try_into().expect("incorrect length"));
+        let ff_write = buf[18] == 2;
+        let ff_read = buf[19] == 2;
 
         //get reserve space
-        //the payload fractions also get read here; in the future we might
-        //make multiple buffers to reduce the actual amount of reading, but for now
-        //we'll just ignore them
-        reader.read(&mut buf)?;
-        let page_reserve_bytes = (&buf[0]).clone();
+        let page_reserve_bytes = (&buf[20]).clone();
 
         //get num pages
-        reader.seek(io::SeekFrom::Current(4))?;
-        reader.read(&mut buf)?;
-
-        let num_pages = u32::from_be_bytes(buf.try_into().expect("invalid length"));
+        let num_pages = u32::from_be_bytes((&buf[28..32]).try_into().expect("invalid length"));
 
         //get first freelist page
-        reader.read(&mut buf)?;
-
-        let freelist_start = u32::from_be_bytes(buf.try_into().expect("invalid length"));
+        let freelist_start = u32::from_be_bytes((&buf[32..36]).try_into().expect("invalid length"));
 
         //get num free pages
-        reader.read(&mut buf)?;
-
-        let free_pages = u32::from_be_bytes(buf.try_into().expect("invalid length"));
+        let free_pages = u32::from_be_bytes((&buf[36..40]).try_into().expect("invalid length"));
 
         
 
@@ -223,13 +210,14 @@ impl DBSchemaTable {
             freelist_start,
             free_pages,
         };
+        println!("{:?}", db_header);
         let column_arr: Vec<String> = Vec::new(); 
         let mut tree_root = DBTreePage::new(&mut db_header, 1, column_arr)?;
 
-        let table_data = tree_root.select(vec![FieldDefinitionExpression::All], None)?;
-
-        let mut tables: HashSet<TableFmt> = HashSet::with_capacity(table_data.get("type").expect("schema table somehow missing type column").len());
+        //let table_data = tree_root.select(vec![FieldDefinitionExpression::All], None)?;
+        let table_data: HashMap<String, Vec<String>> = HashMap::new();
         
+        /*let mut tables: HashSet<TableFmt> = HashSet::with_capacity(table_data.get("type").expect("schema table somehow missing type column").len());
         for (table_type, name, tbl_name, root_page, sql) in multizip(table_data.values().collect_tuple::<(&Vec<String>, &Vec<String>, &Vec<String>, &Vec<String>, &Vec<String>)>().expect("error with argument numbers while going through schema table")) {
             tables.insert(
                 TableFmt {
@@ -240,9 +228,9 @@ impl DBSchemaTable {
                     sql: sql.to_owned()
                 }
             );
-        }
+        }*/
         
-        //let tables = HashSet::new();
+        let tables = HashSet::new();
         Ok(DBSchemaTable {
             db_header,
             tables
